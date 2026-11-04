@@ -1131,9 +1131,9 @@ sequenceDiagram
 
 | 项目 | 设计 |
 |---|---|
-| 声明 | manifest `jobs`：`id`、`schedule`（cron 或 `@every`）、`timeoutSec` |
-| 调度 | 每个节点都计算下一次触发时间；到点后抢 Redis 锁 `lock:job:<plugin>:<job>:<触发时间>`，抢到的节点调用本机插件的 `AppService.RunJob` |
-| 保证 | 同一个任务的同一次触发只执行一次（Redis 锁 + `plugin_job_runs` 上的唯一索引 `plugin_job_runs_slot_uniq`，CONTRACTS §27.2）；错过的触发不补跑 |
+| 声明 | manifest `jobs`：`id`、`schedule`（cron 或 `@every`，不小于 5 秒）、`timeoutSec`、`scope`、`title` |
+| 调度 | 0.1.237 起走定时任务框架（CONTRACTS §77.8）：`cluster` 任务（默认）是 River 全集群任务 `plugin.<key>.<id>`，每个时段全集群只跑一次；`node` 任务每个加载了插件的节点各跑一次。执行节点调用本机插件的 `AppService.RunJob`。插件还可以经 Host API 9 在运行时登记任务 |
+| 保证 | 同一时段只跑一次（River 唯一键 + `scheduled_tasks` 租约 + `plugin_job_runs_slot_uniq`）；错过的触发不补跑。超时上限全集群 1 小时、每节点 10 分钟，更长的工作分段续跑 |
 | 记录 | `plugin_job_runs(id, plugin_key, job_id, node_id, scheduled_at, started_at, finished_at, status, error)`，保留最近 1000 条 |
 | 手动触发 | 插件详情页"立即执行"，需要 `plugin:manage` |
 | 禁用 | 插件禁用时停止调度 |

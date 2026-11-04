@@ -502,3 +502,34 @@ func TestPublisherRevocation(t *testing.T) {
 		t.Fatalf("revoked upload: %v", err)
 	}
 }
+
+// A package stored with the same content is not validated again: a check
+// added later (0.1.238's job limits) must not stop an identical re-upload or
+// a market reinstall of a version an older core took.
+func TestIdenticalReuploadSkipsNewerChecks(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	if _, err := e.svc.Upload(ctx, pkgtest.Build(pkgtest.Guard("guard", "0.1.0", "sub2api"), e.root), e.admin, UploadOptions{}); err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	m := pkgtest.Guard("guard", "0.1.1", "sub2api")
+	m.Jobs[1].TimeoutSec = 7200
+	data := pkgtest.Build(m, e.root)
+	if _, err := e.svc.Upload(ctx, data, e.admin, UploadOptions{}); core.AsError(err).Code != "invalid_argument" {
+		t.Fatalf("a new upload over the limits must be rejected: %v", err)
+	}
+	p, err := pkg.Open(data, e.svc.Limits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As an older core would have stored it.
+	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO plugin_versions (plugin_key, version, manifest, manifest_hash, package_sha256,
+			package_size, signature_status, consent_status)
+		SELECT plugin_key, '0.1.1', $1, $2, $3, $4, signature_status, consent_status FROM plugin_versions
+		WHERE plugin_key = 'guard' AND version = '0.1.0'`, p.ManifestRaw, p.ManifestHash, p.SHA256, len(p.Raw)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Upload(ctx, data, e.admin, UploadOptions{}); err != nil {
+		t.Fatalf("an identical re-upload of a stored version: %v", err)
+	}
+}

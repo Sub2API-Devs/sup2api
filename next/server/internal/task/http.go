@@ -316,7 +316,7 @@ func (s *Service) clusterViews(ctx context.Context, name string) ([]ClusterTaskV
 	}
 
 	stats, err := pool.Query(ctx, `SELECT name,
-			count(*) FILTER (WHERE st IN ('succeeded', 'failed', 'timeout', 'skipped')),
+			count(*) FILTER (WHERE st IN ('succeeded', 'continued', 'failed', 'timeout', 'skipped')),
 			count(*) FILTER (WHERE st IN ('failed', 'timeout')),
 			count(*) FILTER (WHERE st = 'skipped'),
 			COALESCE(avg(ms) FILTER (WHERE st <> 'skipped'), 0)::bigint, COALESCE(max(ms), 0),
@@ -551,7 +551,8 @@ type RunsPage struct {
 
 var runFilters = map[string][]string{
 	"":              {},
-	StatusSucceeded: {StatusSucceeded},
+	StatusSucceeded: {StatusSucceeded, StatusContinued},
+	StatusContinued: {StatusContinued},
 	StatusFailed:    {StatusFailed, StatusTimeout},
 	StatusTimeout:   {StatusTimeout},
 	StatusSkipped:   {StatusSkipped},

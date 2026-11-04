@@ -102,11 +102,12 @@ export interface TaskRun {
 export interface RunsPage { runs: TaskRun[]; next_before_id: number | null }
 
 /** Every status a run or a task can show. */
-export const STATUSES = ['running', 'succeeded', 'failed', 'timeout', 'skipped', 'queued', 'retrying', 'cancelled', 'never'] as const
+export const STATUSES = ['running', 'succeeded', 'continued', 'failed', 'timeout', 'skipped', 'queued', 'retrying', 'cancelled', 'never'] as const
 
 const TONES: Record<string, Tone> = {
   running: 'info',
   succeeded: 'success',
+  continued: 'primary',
   failed: 'danger',
   timeout: 'danger',
   skipped: 'gray',
@@ -134,6 +135,7 @@ export function squareClass(status: string): string {
     case 'danger': return 'bg-danger-500'
     case 'warning': return 'bg-warning-500'
     case 'info': return 'bg-info-500'
+    case 'primary': return 'bg-primary-400'
     default: return 'bg-gray-300 dark:bg-gray-600'
   }
 }

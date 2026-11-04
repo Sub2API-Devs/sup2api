@@ -20,6 +20,7 @@ const running = ref('')
 const columns = computed<TableColumn[]>(() => [
   { key: 'id', label: t('plugins.jobs.job') },
   { key: 'schedule', label: t('plugins.jobs.schedule') },
+  { key: 'timeout', label: t('plugins.jobs.timeout'), align: 'right' },
   { key: 'last', label: t('plugins.jobs.lastRun') },
   { key: 'duration', label: t('plugins.jobs.duration'), align: 'right' },
   { key: 'message', label: t('plugins.jobs.message') },
@@ -29,8 +30,9 @@ const columns = computed<TableColumn[]>(() => [
 async function load() {
   loading.value = true
   try {
-    const r = await api.get<PluginJob[] | { items: PluginJob[] }>(`/plugins/${encodeURIComponent(props.detail.key)}/jobs`)
-    jobs.value = Array.isArray(r) ? r : r?.items || []
+    // GET /plugins/:key/jobs answers {jobs, recent_runs}.
+    const r = await api.get<{ jobs?: PluginJob[] }>(`/plugins/${encodeURIComponent(props.detail.key)}/jobs`)
+    jobs.value = r?.jobs || []
   } catch (e) {
     notifyError(e)
   } finally {
@@ -79,8 +81,20 @@ onMounted(load)
         </router-link>
       </template>
       <template #cell-schedule="{ row }">
-        <SCode inline :text="row.schedule" />
+        <SCode inline :text="row.adjusted?.length && row.effective_schedule ? row.effective_schedule : row.schedule" />
         <SHint v-if="row.next_run_at" size="xs">{{ t('plugins.jobs.next') }} {{ formatDateTime(row.next_run_at) }}</SHint>
+      </template>
+      <template #cell-timeout="{ row }">
+        <span class="whitespace-nowrap">{{ row.effective_timeout_sec ? formatDuration(row.effective_timeout_sec * 1000) : '—' }}</span>
+        <SBadge
+          v-if="row.adjusted?.length"
+          tone="warning"
+          class="ml-1"
+          :title="row.adjusted.join('; ')"
+          data-testid="job-adjusted"
+        >
+          {{ t('plugins.jobs.adjusted') }}
+        </SBadge>
       </template>
       <template #cell-last="{ row }">
         <template v-if="row.last_run">

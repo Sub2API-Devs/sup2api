@@ -251,7 +251,7 @@ RETURNING name
 | 超时上限 | cluster 1 小时，node 10 分钟 | 注册时校验 |
 | 重试次数 | `MaxAttempts`，默认：间隔 < 10 分钟的周期任务 1 次（不重试），其他 5 次 | 插入时设 `InsertOpts.MaxAttempts` |
 | 重试间隔 | min(River 默认退避 attempt⁴ 秒, 周期间隔/2, 10 分钟) | 自定义 `NextRetry` |
-| 卡住救回 | 75 分钟 | `RescueStuckJobsAfter`，客户端级，必须大于最长超时 |
+| 卡住救回 | 75 分钟 | `RescueStuckJobsAfter`，客户端级，是救回的下限：River 救回前还会看 `Worker.Timeout(job)`，超时更长的任务等超时过了才救回（2026-11-04 核实 v0.49.0 `job_rescuer.go`）。1 小时上限的真正理由是发布与插件升级会在 20–30 秒内中断运行，长任务应当分段（CONTRACTS §77.8） |
 | 已完成保留 | 24 小时 | `CompletedJobRetentionPeriod` |
 | 取消、丢弃保留 | 7 天 | 便于查失败原因 |
 | 软停 | 20 秒 | `SoftStopTimeout` |
@@ -467,7 +467,7 @@ River v0.49.0 的 PostgreSQL 迁移在 `riverdriver/riverpgxv5@v0.49.0/migration
 ```
 
 - `scope`：`node` 或 `cluster`，省略为 `cluster`（兼容现有四个插件）。
-- 校验：`node` 任务间隔不小于 5 秒、每个插件最多 10 个、超时不超过 10 分钟；`cluster` 任务超时不超过 1 小时（现在允许 24 小时，现有插件最长 600 秒；要改契约，见 §17 第 3 项）。
+- 校验（上传时）：间隔不小于 5 秒；`node` 任务每个插件最多 10 个、超时不超过 10 分钟；`cluster` 任务超时不超过 1 小时（0.1.238 起；之前允许 24 小时，现有插件最长 600 秒）。已存的旧版本不再检查，超出部分登记时截断。
 - 只有 manifest 能声明 `node` 任务。核心在本节点加载这个插件版本时注册（名字 `plugin.<key>.<id>`），卸载、停用、换版本时注销；执行时调本机插件实例的 `RunJob`。
 
 ### 11.2 协议
@@ -674,7 +674,7 @@ app.HandleJob("evaluate", func(ctx context.Context, run sdk.JobRun) (sdk.JobResu
 
 1. **表名**：`scheduled_tasks`（避开已有的 `async_tasks`）。
 2. **node 任务默认每个节点都跑**，`RequireWork` 才看许可（第一版相反）。
-3. **cluster 任务超时上限 1 小时**（River 的救回时间是全局的）。现有插件 manifest 允许 24 小时、实际最长 600 秒；第二批把插件 `cluster` 任务的上限也改为 1 小时，旧 manifest 超过的在安装时截断并警告。
+3. **cluster 任务超时上限 1 小时**。（原写“River 的救回时间是全局的”不准确：救回取全局值与任务超时中较大者。真正的理由是发布、插件升级会在 20–30 秒内中断运行，长工作应当分段续跑。）0.1.238 起插件 `cluster` 任务上传时就限制在 1 小时，旧 manifest 已存的版本在登记任务时截断并记 WARN。
 4. **每分钟及更频繁的周期任务失败不重试**，等下一次。
 5. **`core.helper.payload_expiry` 从 5 秒改为 1 分钟**。
 6. **依赖版本**：River v0.49.0、gocron v2.22.0（较新的版本发布不满两周）。

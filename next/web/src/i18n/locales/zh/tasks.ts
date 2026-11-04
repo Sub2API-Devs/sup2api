@@ -39,6 +39,7 @@ export default {
   status: {
     running: '运行中',
     succeeded: '成功',
+    continued: '已续跑',
     failed: '失败',
     timeout: '超时',
     skipped: '跳过',
@@ -101,6 +102,7 @@ export default {
     filterAll: '全部',
     filterFailed: '失败',
     filterSkipped: '跳过',
+    filterContinued: '已续跑',
     filterQueued: '排队中',
     time: '时间',
     attempt: '尝试',

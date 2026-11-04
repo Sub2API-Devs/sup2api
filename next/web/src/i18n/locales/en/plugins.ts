@@ -42,6 +42,7 @@ export default {
     ok: 'OK',
     success: 'Success',
     succeeded: 'Succeeded',
+    continued: 'Continued',
     error: 'Error',
     timeout: 'Timeout',
     approved: 'Approved',
@@ -320,7 +321,9 @@ export default {
     triggered: 'Job "{id}" triggered',
     scopeCluster: 'Once per cluster',
     scopeNode: 'Every node',
-    viewInTasks: 'View in scheduled tasks'
+    viewInTasks: 'View in scheduled tasks',
+    timeout: 'Timeout',
+    adjusted: 'Cut to the limits'
   },
 
   events: {

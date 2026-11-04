@@ -12,9 +12,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/job"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/task"
 )
 
 // ---------------------------------------------------------------- nodes
@@ -113,8 +115,14 @@ type JobInfo struct {
 	Task       string                 `json:"task"`  // its name on the scheduled task page
 	Schedule   string                 `json:"schedule"`
 	TimeoutSec int                    `json:"timeout_sec"`
-	NextRunAt  *time.Time             `json:"next_run_at"`
-	LastRun    *JobRun                `json:"last_run"`
+	// The schedule and timeout the core runs it with: the manifest's, with
+	// the default timeout and the limits applied (CONTRACTS §77.8). Adjusted
+	// lists what was cut to the limits.
+	EffectiveSchedule   string     `json:"effective_schedule"`
+	EffectiveTimeoutSec int        `json:"effective_timeout_sec"`
+	Adjusted            []string   `json:"adjusted,omitempty"`
+	NextRunAt           *time.Time `json:"next_run_at"`
+	LastRun             *JobRun    `json:"last_run"`
 }
 
 // JobRun is a plugin_job_runs row.
@@ -173,9 +181,12 @@ func (a *API) jobInfos(ctx context.Context, key string, m *manifest.Manifest) ([
 		if j.NodeScope() {
 			ji.Scope = manifest.JobScopeNode
 		}
-		if sch, err := pkg.ParseSchedule(j.Schedule); err == nil {
-			next := sch.Next(now)
-			ji.NextRunAt = &next
+		if eff, err := job.EffectiveJob(j, 0); err == nil {
+			ji.EffectiveSchedule, ji.EffectiveTimeoutSec, ji.Adjusted = eff.Schedule, int(eff.Timeout/time.Second), eff.Adjusted
+			if sch, err := task.ParseSchedule(eff.Schedule); err == nil {
+				next := sch.Next(now)
+				ji.NextRunAt = &next
+			}
 		}
 		if r, ok := last[j.ID]; ok {
 			r := r

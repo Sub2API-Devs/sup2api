@@ -296,11 +296,18 @@ func (a hookAdapter) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayR
 
 type appAdapter struct{ i *Instance }
 
+// RunJob is bounded by ctx when it has a deadline: the task framework sets
+// the run's effective timeout there, which is the only one a runtime task
+// (no manifest job) has and may be shorter than an old manifest's. Without a
+// deadline the manifest timeout (default 60 s) applies.
 func (a appAdapter) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
-	timeout := TimeoutJobDefault
-	for _, j := range a.i.pkg.Manifest.Jobs {
-		if j.ID == in.GetJobId() && j.TimeoutSec > 0 {
-			timeout = time.Duration(j.TimeoutSec) * time.Second
+	timeout := time.Duration(0)
+	if _, ok := ctx.Deadline(); !ok {
+		timeout = TimeoutJobDefault
+		for _, j := range a.i.pkg.Manifest.Jobs {
+			if j.ID == in.GetJobId() && j.TimeoutSec > 0 {
+				timeout = time.Duration(j.TimeoutSec) * time.Second
+			}
 		}
 	}
 	return invoke(a.i, ctx, classBackground, timeout, appOf, pluginv1.AppServiceClient.RunJob, in)

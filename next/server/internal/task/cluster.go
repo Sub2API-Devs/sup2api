@@ -31,6 +31,7 @@ const (
 	riverSoftStop     = 20 * time.Second
 	maxArgsBytes      = 64 << 10
 	manualKey         = "manual"
+	continueKey       = "continue:"
 	leaseGrace        = time.Minute
 	executorGroupSize = 4
 	executorQueue     = 16
@@ -420,10 +421,13 @@ func (b *clusterBackend) work(ctx context.Context, t *Task, job *river.Job[taskA
 	o := runOutput{Count: res.Count, Message: truncate(res.Message)}
 	var retry *core.TaskRetryAfterError
 	var skip *core.TaskSkippedError
+	var cont *core.TaskContinueError
 	var ret error
 	switch {
 	case herr == nil:
 		o.Status = StatusSucceeded
+	case errors.As(herr, &cont):
+		o.Status = StatusContinued
 	case errors.As(herr, &retry):
 		o.Status, o.Message = StatusSkipped, truncate(herr.Error())
 		ret = river.JobSnooze(retry.Delay)
@@ -441,8 +445,24 @@ func (b *clusterBackend) work(ctx context.Context, t *Task, job *river.Job[taskA
 		b.log.Warn("task: cluster task failed", "task", t.Name, "status", o.Status, "err", o.Error,
 			"attempt", job.Attempt, "max_attempts", job.MaxAttempts)
 	}
+	if cont != nil {
+		b.continueRun(context.WithoutCancel(ctx), t, job, cont.Delay)
+	}
 	record(o)
 	return ret
+}
+
+// continueRun inserts the continuation of job: one run after delay with the
+// same args. Its key names the run it continues, so a retried insert does
+// not make two; the lease keeps it from overlapping a scheduled run. A
+// failed insert leaves the work to the next scheduled run.
+func (b *clusterBackend) continueRun(ctx context.Context, t *Task, job *river.Job[taskArgs], delay time.Duration) {
+	_, err := b.client.Insert(ctx, taskArgs{Name: t.Name, Key: continueKey + strconv.FormatInt(job.ID, 10), Args: job.Args.Args},
+		&river.InsertOpts{Queue: t.queue(), MaxAttempts: t.Attempts(), ScheduledAt: time.Now().Add(delay),
+			UniqueOpts: river.UniqueOpts{ByArgs: true, ByState: unfinishedStates}})
+	if err != nil {
+		b.log.Warn("task: insert the continuation", "task", t.Name, "run_id", job.ID, "err", err)
+	}
 }
 
 // errTaskRemoved is takeLease's answer for a plugin task without a row.
@@ -489,6 +509,13 @@ func (b *clusterBackend) finish(ctx context.Context, t *Task, jobID int64, o run
 			updated_at = clock_timestamp() WHERE name = $1 AND lease_job_id = $2`, t.Name, jobID)
 		return err
 	}
+	// scheduled_tasks.last_status keeps the 0.1.235 values (its CHECK
+	// constraint): a continued run is a success there; its run record keeps
+	// "continued".
+	status := o.Status
+	if status == StatusContinued {
+		status = StatusSucceeded
+	}
 	_, err := b.db.Pool.Exec(ctx, `UPDATE scheduled_tasks SET
 			lease_job_id = CASE WHEN lease_job_id = $2 THEN NULL ELSE lease_job_id END,
 			lease_node = CASE WHEN lease_job_id = $2 THEN NULL ELSE lease_node END,
@@ -499,6 +526,6 @@ func (b *clusterBackend) finish(ctx context.Context, t *Task, jobID int64, o run
 			consecutive_failures = CASE WHEN $4 = 'succeeded' THEN 0 WHEN $4 = 'skipped' THEN consecutive_failures
 				ELSE consecutive_failures + 1 END,
 			updated_at = clock_timestamp()
-		WHERE name = $1`, t.Name, jobID, b.nodeID, o.Status, o.Count, o.Message, o.Error)
+		WHERE name = $1`, t.Name, jobID, b.nodeID, status, o.Count, o.Message, o.Error)
 	return err
 }

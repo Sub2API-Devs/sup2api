@@ -22,7 +22,11 @@ const (
 	SourcePluginRuntime  Source = "plugin_runtime"
 )
 
-// Limits of a spec (TASK-FRAMEWORK-DESIGN §4, §7.6).
+// Limits of a spec (TASK-FRAMEWORK-DESIGN §4, §7.6). River would wait out a
+// longer cluster timeout before rescuing a run (it checks Worker.Timeout),
+// but a core release stops a run within seconds: longer work continues in
+// further runs (core.TaskContinue). Plugin manifests are held to the same
+// limits (manifest.MaxClusterJobTimeoutSec, checked by internal/job tests).
 const (
 	MaxClusterTimeout = time.Hour
 	MaxNodeTimeout    = 10 * time.Minute

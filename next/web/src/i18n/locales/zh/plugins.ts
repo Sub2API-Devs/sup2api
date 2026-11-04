@@ -42,6 +42,7 @@ export default {
     ok: '正常',
     success: '成功',
     succeeded: '成功',
+    continued: '已续跑',
     error: '错误',
     timeout: '超时',
     approved: '已批准',
@@ -320,7 +321,9 @@ export default {
     triggered: '已触发任务 "{id}"',
     scopeCluster: '全集群一次',
     scopeNode: '每个节点',
-    viewInTasks: '在定时任务中查看'
+    viewInTasks: '在定时任务中查看',
+    timeout: '超时',
+    adjusted: '已按上限调整'
   },
 
   events: {

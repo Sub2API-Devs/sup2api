@@ -515,3 +515,58 @@ func TestStopUnregisters(t *testing.T) {
 	require.False(t, registered(n, "plugin.demo.warm"))
 	requireCode(t, n.bridge.RunNow(context.Background(), "demo", "sync", 1), core.ErrUnavailable)
 }
+
+// The manifest limits (checked at upload) are the framework's limits.
+func TestManifestLimitsMatchTheFramework(t *testing.T) {
+	require.Equal(t, task.MaxClusterTimeout, time.Duration(manifest.MaxClusterJobTimeoutSec)*time.Second)
+	require.Equal(t, task.MaxNodeTimeout, time.Duration(manifest.MaxNodeJobTimeoutSec)*time.Second)
+	require.GreaterOrEqual(t, manifest.MinJobEvery, task.MinClusterEvery)
+	require.Greater(t, (&Options{}).withDefaults().StaleAfter, task.MaxClusterTimeout)
+}
+
+func TestEffectiveJob(t *testing.T) {
+	e, err := EffectiveJob(manifest.Job{ID: "a", Schedule: "@every 1s", TimeoutSec: 7200}, 0)
+	require.NoError(t, err)
+	require.Equal(t, time.Hour, e.Timeout)
+	require.Equal(t, "@every 5s", e.Schedule)
+	require.Len(t, e.Adjusted, 2)
+	e, err = EffectiveJob(manifest.Job{ID: "a", Schedule: "0 3 * * *"}, 0)
+	require.NoError(t, err)
+	require.Equal(t, time.Minute, e.Timeout)
+	require.Equal(t, "0 3 * * *", e.Schedule)
+	require.Empty(t, e.Adjusted)
+	e, err = EffectiveJob(manifest.Job{ID: "a", Schedule: "@every 1m", TimeoutSec: 900, Scope: manifest.JobScopeNode}, 0)
+	require.NoError(t, err)
+	require.Equal(t, 10*time.Minute, e.Timeout)
+	require.Equal(t, "@every 1m0s", e.Schedule)
+}
+
+// A plugin that did part of the work asks to continue: the run is
+// "continued" and the next part runs soon.
+func TestPluginContinueAfter(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "purge", Schedule: "0 3 * * *"})
+	var calls int
+	var mu sync.Mutex
+	app := &fakeApp{run: func(context.Context, *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls++
+		if calls == 1 {
+			return &pluginv1.RunJobResponse{Count: 5000, ContinueAfterMs: 1000}, nil
+		}
+		return &pluginv1.RunJobResponse{Message: "done"}, nil
+	}}
+	n := e.node(t, "node-a", p, app)
+	require.NoError(t, n.bridge.RunNow(context.Background(), "demo", "purge", 1))
+	waitFor(t, "two parts", 15*time.Second, func() bool {
+		rows := runRows(t, e.db, "demo", "purge")
+		return len(rows) == 2 && rows[1].Status == StatusSucceeded
+	})
+	rows := runRows(t, e.db, "demo", "purge")
+	require.Equal(t, StatusContinued, rows[0].Status)
+	require.Equal(t, "continues in 1s", rows[0].Message)
+	require.True(t, rows[0].Manual)
+	require.False(t, rows[1].Manual)
+}

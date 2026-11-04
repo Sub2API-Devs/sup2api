@@ -219,9 +219,13 @@ func (b *nodeBackend) run(nj *nodeJob, manual bool) {
 	run := NodeTaskRun{ID: runID, StartedAt: started, FinishedAt: finished, Manual: manual, Count: res.Count, Message: truncate(res.Message)}
 	var retry *core.TaskRetryAfterError
 	var skip *core.TaskSkippedError
+	var cont *core.TaskContinueError
 	switch {
 	case err == nil:
 		run.Status = StatusSucceeded
+	case errors.As(err, &cont):
+		run.Status = StatusContinued
+		b.continueRun(nj, cont.Delay)
 	case errors.As(err, &retry):
 		run.Status = StatusSkipped
 		run.Message = truncate(err.Error())
@@ -234,6 +238,19 @@ func (b *nodeBackend) run(nj *nodeJob, manual bool) {
 		run.Status, run.Error = StatusFailed, truncate(err.Error())
 	}
 	b.finish(nj, run, true)
+}
+
+// continueRun runs nj again on this node after delay, unless the backend
+// stopped or the task was unregistered or registered again meanwhile.
+func (b *nodeBackend) continueRun(nj *nodeJob, delay time.Duration) {
+	time.AfterFunc(delay, func() {
+		b.mu.Lock()
+		current := b.jobs[nj.task.Name] == nj && !b.stopped
+		b.mu.Unlock()
+		if current {
+			b.run(nj, false)
+		}
+	})
 }
 
 // runID is the history id of a run started at started.
@@ -256,7 +273,7 @@ func (b *nodeBackend) finish(nj *nodeJob, run NodeTaskRun, history bool) {
 		st.LastStartedAt, st.LastFinishedAt = &started, &finished
 	}
 	switch run.Status {
-	case StatusSucceeded:
+	case StatusSucceeded, StatusContinued:
 		st.ConsecutiveFailures = 0
 		at := run.FinishedAt
 		st.LastSuccessAt = &at

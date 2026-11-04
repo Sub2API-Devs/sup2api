@@ -6108,13 +6108,17 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - `node` 任务：每个加载了这个插件的节点各跑一次，用自己的插件实例；最多 10 个，间隔不小于 5 秒，超时不超过 600 秒；需要后台许可（`RequireWork`）。声明了 `node` 任务的插件，`hostCompat` 不能包含 0.1.236 及更早的核心（旧核心会把它当全集群任务跑），打包检查报 `below_node_jobs_core`。
 - `cluster` 任务：任务名 `plugin.<key>.<id>`，`scheduled_tasks.source = 'plugin_manifest'`。行由运行着插件当前版本的节点按 manifest 写入，所有节点从行登记（River 主节点不一定装了这个插件）；执行节点本机没有这个插件时每 5 秒推迟一次，超过任务超时才记失败。插件停用或卸载时删行，换版本时按新版本改写。
-- 旧 manifest 超出框架上限的（超时超过 1 小时、间隔小于 5 秒）在登记时截断并记 WARN。
+- **上限（0.1.238 起上传时检查）**：全集群任务超时不超过 3600 秒、每节点任务不超过 600 秒，不写为 60 秒；间隔不小于 5 秒（`manifest.MaxClusterJobTimeoutSec` 等常量，与框架的 `task.MaxClusterTimeout` 等由测试保持一致）。超出的新上传、市场安装返回 `jobs[i].timeoutSec`/`schedule` `out_of_range`。早先上传、已存的版本不再检查：照常加载、启用、升级、回滚，超出部分在登记任务时截断并记 WARN；内容完全相同的包重新上传（含市场重装）跳过检查。
+- 插件 API `GET /plugins/:key/jobs` 每个任务带 `effective_schedule`、`effective_timeout_sec`（核心实际使用的值）和 `adjusted`（被截断的说明，没有则省略）；插件“任务”页签显示实际超时，被调整的标“已按上限调整”。
+- **长工作分段跑**：一次运行最长 1 小时，发布核心约 20 秒、升级插件约 30 秒就会中断正在跑的任务，所以可能更久的工作要分批做、在截止前停下（读 ctx 的 deadline，不要按 manifest 数字算），把进度存在自己的表里，返回 `continue_after_ms` 续跑（见下），或交给下一次计划运行。moderation 的保留期清理是参考写法。
 - 每次运行仍写 `plugin_job_runs`（插件页“任务”页签），加 `scope` 列（迁移 0084 已加）。计划运行用 `plugin_job_runs_slot_uniq` 认领时段：和仍自己调度的旧核心混跑时，同一时段也只跑一次。
 
 **协议（`app.proto`）**
 
 - `RunJobRequest` 加 `args`（单次运行的参数）、`scope`、`attempt`、`run_id`。
 - `RunJobResponse` 加 `count`（处理条数）、`retry_after_ms`（> 0：本次没做事；全集群任务这么久之后再跑、不算失败，每节点任务记为跳过）。
+- 0.1.238 加 `continue_after_ms`（> 0：本次做了一部分、还有剩余）：这次运行记为“已续跑”（`continued`，算成功，清零连续失败），这么久之后用同样的参数再跑一次。全集群任务插入一条续跑运行（键 `continue:<上一次运行 id>`，重复插入只保留一条；和计划运行之间仍靠租约不重叠），每节点任务在本节点再跑。`scheduled_tasks.last_status` 仍记 `succeeded`（表的 CHECK 约束不变，本次无迁移），运行历史和 `plugin_job_runs` 记 `continued`。两者都设时以 `retry_after_ms` 为准。旧核心忽略这个字段，按成功处理，由下一次计划运行接着做。
+- 0.1.237 的 bug（0.1.238 修复）：核心调插件 `RunJob` 时只按 manifest 任务找超时，运行时任务不在 manifest 里，一律被 60 秒切断。现在有截止时间时（框架总会设）以它为准。
 - 旧核心不发、不读这些字段。
 
 **Host API 9（`host.proto`，需要 `jobs` 授权）：运行时任务**

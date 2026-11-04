@@ -16,6 +16,9 @@ const (
 	StatusFailed    = "failed"
 	StatusTimeout   = "timeout"
 	StatusSkipped   = "skipped"
+	// StatusContinued is a run that did part of the work and has a
+	// continuation (core.TaskContinue); it counts as a success.
+	StatusContinued = "continued"
 )
 
 const (

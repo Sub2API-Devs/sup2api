@@ -5,7 +5,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SButton, SChart, SDateTime, SDescItem, SDescriptions, SDrawer, SEmpty, SHint, SSectionTitle, SSegmented, SSelect, SStatusBadge, STable, type TableColumn } from '@sub2api/ui'
-import { describeSchedule, formatDuration, runTone, taskTitle, type RunsPage, type TaskDetail, type TaskRun } from './tasks'
+import { STATUSES, describeSchedule, formatDuration, runTone, taskTitle, type RunsPage, type TaskDetail, type TaskRun } from './tasks'
 
 const props = defineProps<{ open: boolean; name: string; nodeID?: string; canRun: boolean }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'run', name: string, nodeID: string): void }>()
@@ -26,9 +26,10 @@ const filters = computed(() => [
   { value: '', label: t('tasks.drawer.filterAll') },
   { value: 'failed', label: t('tasks.drawer.filterFailed') },
   { value: 'skipped', label: t('tasks.drawer.filterSkipped') },
+  { value: 'continued', label: t('tasks.drawer.filterContinued') },
   ...(isNode.value ? [] : [{ value: 'queued', label: t('tasks.drawer.filterQueued') }])
 ])
-const statusLabels = computed(() => Object.fromEntries(['running', 'succeeded', 'failed', 'timeout', 'skipped', 'queued', 'retrying', 'cancelled', 'never'].map((s) => [s, t(`tasks.status.${s}`)])))
+const statusLabels = computed(() => Object.fromEntries(STATUSES.map((s) => [s, t(`tasks.status.${s}`)])))
 const statusTones = computed(() => Object.fromEntries(Object.keys(statusLabels.value).map((s) => [s, runTone(s)])))
 
 const columns = computed<TableColumn[]>(() => [

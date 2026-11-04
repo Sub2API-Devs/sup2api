@@ -87,6 +87,7 @@ const PLUGIN_TONES: Record<string, Tone> = {
   ok: 'success',
   success: 'success',
   succeeded: 'success',
+  continued: 'primary',
   approved: 'success',
   enabling: 'primary',
   upgrading: 'primary',
@@ -340,6 +341,11 @@ export interface PluginJob {
   task?: string
   schedule: string
   timeout_sec?: number
+  /** The schedule and timeout the core runs it with (defaults and limits applied). */
+  effective_schedule?: string
+  effective_timeout_sec?: number
+  /** What was cut to the limits, e.g. "timeout 2h0m0s cut to 1h0m0s". */
+  adjusted?: string[]
   next_run_at?: string | null // assumed
   last_run?: JobRun | null
 }

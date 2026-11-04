@@ -47,8 +47,17 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 		return nil, guardErr
 	}
 	defer release()
-	if err := s.validatePackage(ctx, p, opt); err != nil {
+	// A package already stored with the same content was validated by the
+	// core that took it; checks added since (the job limits of 0.1.238) must
+	// not stop it from being re-uploaded or installed again from the market.
+	stored, err := s.storedIdentical(ctx, p)
+	if err != nil {
 		return nil, err
+	}
+	if !stored {
+		if err := s.validatePackage(ctx, p, opt); err != nil {
+			return nil, err
+		}
 	}
 
 	rec, err := s.recordUpload(ctx, p, actorID, opt)
@@ -90,6 +99,16 @@ func (s *Service) openAndValidate(ctx context.Context, data []byte, opt UploadOp
 		return nil, core.ErrInvalidArgument.WithMessage(fmt.Sprintf("package version %q does not match %q", m.Version, opt.ExpectVersion))
 	}
 	return p, nil
+}
+
+// storedIdentical reports whether this exact package is stored as its key and
+// version (and was not rejected).
+func (s *Service) storedIdentical(ctx context.Context, p *pkg.Package) (bool, error) {
+	var ok bool
+	err := s.d.DB.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM plugin_versions
+		WHERE plugin_key = $1 AND version = $2 AND package_sha256 = $3 AND consent_status <> $4)`,
+		p.Manifest.Key, p.Manifest.Version, p.SHA256, ConsentRejected).Scan(&ok)
+	return ok, err
 }
 
 // validatePackage runs the manifest validation against the other installed

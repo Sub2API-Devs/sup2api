@@ -39,6 +39,7 @@ export default {
   status: {
     running: 'Running',
     succeeded: 'Succeeded',
+    continued: 'Continued',
     failed: 'Failed',
     timeout: 'Timed out',
     skipped: 'Skipped',
@@ -101,6 +102,7 @@ export default {
     filterAll: 'All',
     filterFailed: 'Failed',
     filterSkipped: 'Skipped',
+    filterContinued: 'Continued',
     filterQueued: 'Queued',
     time: 'Time',
     attempt: 'Attempt',

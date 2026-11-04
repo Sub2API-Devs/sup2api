@@ -20,6 +20,8 @@ func TestRuntimeTasksSyncAndRun(t *testing.T) {
 	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "cleanup", Schedule: "0 3 * * *"})
 	app := &fakeApp{}
 	n := e.node(t, "node-a", p, app)
+	// node-b runs no plugin: a run it picks up is put off 5 s at a time, so
+	// the waits below allow for a few of those.
 	other := e.node(t, "node-b", nil, nil)
 
 	ignored, err := n.bridge.SyncPluginTasks(ctx, "demo", "1.0.0", []core.PluginTask{
@@ -50,7 +52,7 @@ func TestRuntimeTasksSyncAndRun(t *testing.T) {
 	require.Equal(t, before, after)
 
 	// A periodic run gets the task's args.
-	waitFor(t, "a periodic run of evaluate", 25*time.Second, func() bool {
+	waitFor(t, "a periodic run of evaluate", 45*time.Second, func() bool {
 		for _, c := range app.snapshot() {
 			if c.GetJobId() == "evaluate" {
 				return true
@@ -73,7 +75,7 @@ func TestRuntimeTasksSyncAndRun(t *testing.T) {
 	require.NoError(t, e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM river_job WHERE args->>'name' = 'plugin.demo.review'`).Scan(&waiting))
 	require.Equal(t, 1, waiting)
 	require.NoError(t, n.bridge.EnqueuePluginTask(ctx, "demo", "review", json.RawMessage(`{"id":2}`), core.EnqueueOpts{}))
-	waitFor(t, "the enqueued run", 10*time.Second, func() bool {
+	waitFor(t, "the enqueued run", 40*time.Second, func() bool {
 		for _, c := range app.snapshot() {
 			if c.GetJobId() == "review" && jsonEqual(string(c.GetArgs()), `{"id":2}`) {
 				return true

@@ -133,6 +133,19 @@ func (e *TaskRetryAfterError) Error() string {
 // TaskRetryAfter returns a TaskRetryAfterError for d.
 func TaskRetryAfter(d time.Duration) error { return &TaskRetryAfterError{Delay: d} }
 
+// TaskContinueError ends a run as continued: it did part of the work and
+// runs again after Delay with the same args. It counts as a success (resets
+// the consecutive failures). A cluster run inserts its continuation; a node
+// run runs again on this node.
+type TaskContinueError struct{ Delay time.Duration }
+
+func (e *TaskContinueError) Error() string {
+	return fmt.Sprintf("task: continues after %s", e.Delay)
+}
+
+// TaskContinue returns a TaskContinueError for d (at least 1 second).
+func TaskContinue(d time.Duration) error { return &TaskContinueError{Delay: max(d, time.Second)} }
+
 // TaskSkippedError ends a run as skipped: it did nothing, is not a failure
 // and is not retried (a plugin task whose plugin is disabled, a slot another
 // node already ran). Reason becomes the run's message.

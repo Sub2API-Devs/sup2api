@@ -142,3 +142,56 @@ func TestUnregisterNodeTask(t *testing.T) {
 	}
 	require.ErrorIs(t, s.Trigger(context.Background(), "plugin.demo.tick"), core.ErrTaskUnknown)
 }
+
+// A continued run counts as a success and the next part runs with the same
+// args; parts never overlap.
+func TestTaskContinueRunsTheNextPart(t *testing.T) {
+	t.Parallel()
+	env := newClusterEnv(t)
+	var log runLog
+	spec := clusterSpec("core.test.parts", func(_ context.Context, run core.TaskRun) (core.TaskResult, error) {
+		if n := log.add(run); n < 3 {
+			return core.TaskResult{Count: 10, Message: "part"}, core.TaskContinue(time.Second)
+		}
+		return core.TaskResult{Count: 1, Message: "done"}, nil
+	})
+	s := env.service(t, "node-a", nil, spec)
+	require.NoError(t, s.Enqueue(context.Background(), "core.test.parts", map[string]int{"from": 0}, core.EnqueueOpts{}))
+	waitLong(t, "three parts", 20*time.Second, func() bool { return log.len() == 3 })
+	for _, run := range log.list() {
+		require.JSONEq(t, `{"from":0}`, string(run.Args))
+	}
+	waitLong(t, "the last part recorded", 5*time.Second, func() bool {
+		rows := jobRows(t, env.db, "core.test.parts")
+		return len(rows) == 3 && rows[2].Output != nil
+	})
+	rows := jobRows(t, env.db, "core.test.parts")
+	require.Equal(t, StatusContinued, rows[0].Output.Status)
+	require.Equal(t, StatusContinued, rows[1].Output.Status)
+	require.Equal(t, StatusSucceeded, rows[2].Output.Status)
+	require.Zero(t, readTaskRow(t, env.db, "core.test.parts").Failures)
+	time.Sleep(1500 * time.Millisecond)
+	require.Equal(t, 3, log.len(), "no part after the last")
+}
+
+func TestNodeTaskContinue(t *testing.T) {
+	t.Parallel()
+	s := newNodeEnv(t).service(t, "node-a", nil)
+	var log runLog
+	require.NoError(t, s.Register(nodeSpec("core.test.nodeparts", func(_ context.Context, run core.TaskRun) (core.TaskResult, error) {
+		if log.add(run) == 1 {
+			return core.TaskResult{}, core.TaskContinue(time.Second)
+		}
+		return core.TaskResult{}, nil
+	})))
+	require.NoError(t, s.Trigger(context.Background(), "core.test.nodeparts"))
+	waitFor(t, "the second part", func() bool { return log.len() == 2 })
+	waitFor(t, "a success", func() bool {
+		for _, st := range s.NodeStates() {
+			if st.Name == "core.test.nodeparts" {
+				return st.Status == StatusSucceeded && st.ConsecutiveFailures == 0
+			}
+		}
+		return false
+	})
+}

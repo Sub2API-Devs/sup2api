@@ -46,6 +46,7 @@ const (
 	StatusFailed    = "failed"
 	StatusTimeout   = "timeout"
 	StatusSkipped   = "skipped"
+	StatusContinued = "continued" // did part of the work; a continuation follows
 )
 
 const maxMessageLen = 2000
@@ -54,15 +55,10 @@ const maxMessageLen = 2000
 // 0015).
 const slotUniqueIndex = "plugin_job_runs_slot_uniq"
 
-// Limits applied to manifest jobs (TASK-FRAMEWORK-DESIGN §11.1, §17 item 3):
-// older manifests may declare longer timeouts or shorter intervals than the
-// framework runs; they are cut to these with a warning.
-const (
-	minEvery = 5 * time.Second
-	// notLoadedRetry is how soon a cluster run is put off on a node that does
-	// not run the plugin, until the run is older than the job's timeout.
-	notLoadedRetry = 5 * time.Second
-)
+// notLoadedRetry is how soon a cluster run is put off on a node that does not
+// run the plugin, until the run is older than the job's timeout. The limits
+// of manifest jobs are the manifest package's (see EffectiveJob).
+const notLoadedRetry = 5 * time.Second
 
 // Tasks is the part of the task service the bridge uses (*task.Service).
 type Tasks interface {
@@ -81,9 +77,11 @@ type Options struct {
 	KeepRuns          int           // runs kept per (plugin, job) (1000)
 	RetentionInterval time.Duration // the schedule of core.jobs.retention (1h)
 	// StaleAfter marks "running" rows older than this as failed during
-	// retention (their node died). Must exceed the maximum job timeout.
+	// retention (their node died). Must exceed the longest run (1 hour); 2 hours.
 	StaleAfter time.Duration
 }
+
+func (o Options) withDefaults() Options { o.defaults(); return o }
 
 func (o *Options) defaults() {
 	if o.DefaultTimeout <= 0 {
@@ -99,7 +97,7 @@ func (o *Options) defaults() {
 		o.RetentionInterval = time.Hour
 	}
 	if o.StaleAfter <= 0 {
-		o.StaleAfter = 25 * time.Hour
+		o.StaleAfter = 2 * time.Hour
 	}
 }
 
@@ -575,35 +573,19 @@ func (b *Bridge) nodeTask(jb core.JobBinding) (desired, bool) {
 // does not run (with one warning per change).
 func (b *Bridge) jobSpec(key string, j manifest.Job, m *manifest.Manifest, scope core.TaskScope) (core.TaskSpec, bool) {
 	name := TaskName(key, j.ID)
-	every, cron, err := splitSchedule(j.Schedule)
+	eff, err := EffectiveJob(j, b.opts.DefaultTimeout)
 	if err != nil {
 		b.log.Warn("jobs: invalid plugin job schedule", "plugin", key, "job", j.ID, "schedule", j.Schedule, "err", err)
 		return core.TaskSpec{}, false
 	}
-	timeout := b.opts.DefaultTimeout
-	if j.TimeoutSec > 0 {
-		timeout = time.Duration(j.TimeoutSec) * time.Second
-	}
-	limit := task.MaxClusterTimeout
-	if scope == core.TaskNode {
-		limit = task.MaxNodeTimeout
-	}
-	var cut []string
-	if timeout > limit {
-		cut = append(cut, fmt.Sprintf("timeout %s cut to %s", timeout, limit))
-		timeout = limit
-	}
-	if every > 0 && every < minEvery {
-		cut = append(cut, fmt.Sprintf("interval %s raised to %s", every, minEvery))
-		every = minEvery
-	}
-	if note := strings.Join(cut, ", "); note != b.warned[name] {
+	if note := strings.Join(eff.Adjusted, ", "); note != b.warned[name] {
 		if note != "" {
 			b.log.Warn("jobs: plugin job adjusted to the task limits", "task", name, "adjusted", note)
 		}
 		b.warned[name] = note
 	}
-	spec := core.TaskSpec{Name: name, Title: jobTitle(m, j), Scope: scope, Every: every, Cron: cron, Timeout: timeout}
+	timeout := eff.Timeout
+	spec := core.TaskSpec{Name: name, Title: jobTitle(m, j), Scope: scope, Every: eff.Every, Cron: eff.Cron, Timeout: timeout}
 	if scope == core.TaskNode {
 		// Jobs ran only on admitted nodes before the framework; node jobs
 		// keep that.
@@ -611,6 +593,53 @@ func (b *Bridge) jobSpec(key string, j manifest.Job, m *manifest.Manifest, scope
 	}
 	spec.Handler = b.handler(key, j.ID, scope, timeout, false, nil)
 	return spec, true
+}
+
+// Effective is how the core runs a manifest job.
+type Effective struct {
+	Timeout time.Duration
+	Every   time.Duration // or Cron
+	Cron    string
+	// Schedule is the schedule as the scheduled task page shows it
+	// ("@every 5s" or the cron expression).
+	Schedule string
+	// Adjusted lists what was cut to the limits (manifests uploaded before
+	// core 0.1.238 may declare more than the framework runs).
+	Adjusted []string
+}
+
+// EffectiveJob is how the core runs manifest job j: the default timeout
+// (defaultTimeout, or manifest.DefaultJobTimeoutSec when 0) and the limits
+// of its scope applied.
+func EffectiveJob(j manifest.Job, defaultTimeout time.Duration) (Effective, error) {
+	every, cron, err := splitSchedule(j.Schedule)
+	if err != nil {
+		return Effective{}, err
+	}
+	if defaultTimeout <= 0 {
+		defaultTimeout = manifest.DefaultJobTimeoutSec * time.Second
+	}
+	e := Effective{Timeout: defaultTimeout, Cron: cron}
+	if j.TimeoutSec > 0 {
+		e.Timeout = time.Duration(j.TimeoutSec) * time.Second
+	}
+	limit := time.Duration(manifest.MaxClusterJobTimeoutSec) * time.Second
+	if j.NodeScope() {
+		limit = time.Duration(manifest.MaxNodeJobTimeoutSec) * time.Second
+	}
+	if e.Timeout > limit {
+		e.Adjusted = append(e.Adjusted, fmt.Sprintf("timeout %s cut to %s", e.Timeout, limit))
+		e.Timeout = limit
+	}
+	if every > 0 && every < manifest.MinJobEvery {
+		e.Adjusted = append(e.Adjusted, fmt.Sprintf("interval %s raised to %s", every, manifest.MinJobEvery))
+		every = manifest.MinJobEvery
+	}
+	e.Every, e.Schedule = every, cron
+	if every > 0 {
+		e.Schedule = "@every " + every.String()
+	}
+	return e, nil
 }
 
 // splitSchedule turns a schedule into Every or Cron; "" (a runtime task that
@@ -711,7 +740,7 @@ func (b *Bridge) run(ctx context.Context, key, jobID string, scope core.TaskScop
 		Args: run.Args, Scope: string(scope), Attempt: int32(run.Attempt), RunId: run.RunID,
 	})
 	status, msg := StatusSucceeded, resp.GetMessage()
-	var retry time.Duration
+	var retry, cont time.Duration
 	switch {
 	case ctx.Err() == context.DeadlineExceeded:
 		status, msg = StatusTimeout, fmt.Sprintf("timed out after %s", timeout)
@@ -725,9 +754,15 @@ func (b *Bridge) run(ctx context.Context, key, jobID string, scope core.TaskScop
 		if msg == "" {
 			msg = fmt.Sprintf("put off by the plugin for %s", retry)
 		}
+	case resp.GetContinueAfterMs() > 0:
+		cont = time.Duration(resp.GetContinueAfterMs()) * time.Millisecond
+		status = StatusContinued
+		if msg == "" {
+			msg = fmt.Sprintf("continues in %s", cont)
+		}
 	}
 	msg = truncate(msg)
-	if status != StatusSucceeded && status != StatusSkipped {
+	if status == StatusFailed || status == StatusTimeout {
 		b.log.Warn("job finished", "plugin", key, "job", jobID, "scope", scope, "run_id", id, "manual", run.Manual,
 			"status", status, "duration", time.Since(started), "message", msg)
 	}
@@ -740,6 +775,8 @@ func (b *Bridge) run(ctx context.Context, key, jobID string, scope core.TaskScop
 		return res, ctx.Err()
 	case retry > 0:
 		return res, core.TaskRetryAfter(retry)
+	case cont > 0:
+		return res, core.TaskContinue(cont)
 	}
 	return res, nil
 }

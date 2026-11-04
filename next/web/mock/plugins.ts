@@ -721,8 +721,11 @@ function hooksOf(p: MockPlugin): Any[] {
 function jobsOf(p: MockPlugin): Any[] {
   if (p.key === 'guard') {
     return [
-      { id: 'rollup', schedule: '@every 5m', last_run: { status: 'succeeded', node_id: 'node-2', started_at: now(-120), finished_at: now(-119.2), message: 'rolled up 1,204 rows' } },
-      { id: 'cleanup', schedule: '0 3 * * *', last_run: { status: 'failed', node_id: 'node-1', started_at: now(-40000), finished_at: now(-39996.8), message: 'context deadline exceeded' } }
+      { id: 'rollup', scope: 'cluster', task: 'plugin.guard.rollup', schedule: '@every 5m', timeout_sec: 60, effective_schedule: '@every 5m0s', effective_timeout_sec: 60,
+        last_run: { status: 'succeeded', node_id: 'node-2', started_at: now(-120), finished_at: now(-119.2), message: 'rolled up 1,204 rows' } },
+      { id: 'cleanup', scope: 'cluster', task: 'plugin.guard.cleanup', schedule: '0 3 * * *', timeout_sec: 7200, effective_schedule: '0 3 * * *', effective_timeout_sec: 3600,
+        adjusted: ['timeout 2h0m0s cut to 1h0m0s'],
+        last_run: { status: 'continued', node_id: 'node-1', started_at: now(-40000), finished_at: now(-39996.8), message: 'continues in 1m0s' } }
     ]
   }
   if (p.key === 'anthropic') return [{ id: 'refresh_oauth', schedule: '@every 10m', last_run: null }]
@@ -1018,7 +1021,8 @@ on('GET', '/plugins/:key/egress', (req) => {
 
 on('GET', '/plugins/:key/jobs', (req) => {
   const p = find(req.params.key)
-  return p ? jobsOf(p) : notFound(req.params.key)
+  // Same shape as the core: {jobs, recent_runs}.
+  return p ? { jobs: jobsOf(p), recent_runs: [] } : notFound(req.params.key)
 })
 
 on('POST', '/plugins/:key/jobs/:job_id/run', (req) => {

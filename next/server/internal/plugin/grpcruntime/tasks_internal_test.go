@@ -92,3 +92,30 @@ func TestHostRuntimeTasks(t *testing.T) {
 		t.Fatalf("unknown task: %v", err)
 	}
 }
+
+// A run is bounded by the deadline the task framework set: runtime tasks have
+// no manifest job, so the manifest default (60 s) must not cut them.
+func TestRunJobUsesTheRunDeadline(t *testing.T) {
+	i, _ := testInstance(t, nil, nil, registry.Grants{})
+	var left time.Duration
+	rpc := &appRPC{job: func(ctx context.Context, _ *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
+		d, _ := ctx.Deadline()
+		left = time.Until(d)
+		return &pluginv1.RunJobResponse{}, nil
+	}}
+	i.proc.Store(&proc{app: rpc, limits: limitsOf(i.launchSpec())})
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	if _, err := (appAdapter{i}).RunJob(ctx, &pluginv1.RunJobRequest{JobId: "runtime-task"}); err != nil {
+		t.Fatal(err)
+	}
+	if left < 29*time.Minute {
+		t.Fatalf("run cut to %s, want the caller's 30 minutes", left)
+	}
+	if _, err := (appAdapter{i}).RunJob(context.Background(), &pluginv1.RunJobRequest{JobId: "runtime-task"}); err != nil {
+		t.Fatal(err)
+	}
+	if left > TimeoutJobDefault {
+		t.Fatalf("without a deadline the default applies, got %s", left)
+	}
+}
