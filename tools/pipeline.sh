@@ -36,3 +36,13 @@ if [ "${VERIFY:-0}" = 1 ]; then
   step verify-deminify; $N tools/emit/deminify-dir.mjs runnable artifacts/tmp/deminify/runnable-dm --force --check-printer --check-canonical | tail -3
   node tools/verify/compare.mjs original artifacts/tmp/deminify/runnable-dm --name deminify-runnable-dm | tail -5
 fi
+if [ "${VERIFY:-0}" = 1 ]; then
+  # static checks on the reading tree (docs/process/lead.md, README "验证")
+  [ -f analysis/verify/readable-check-original.json ] || $N tools/verify/readable-check.mjs original > /dev/null
+  step readable-check;  $N tools/verify/readable-check.mjs | tail -1
+  step readability;     $N tools/verify/readability.mjs analysis/readability naming/final 2>/dev/null | node -e 'const s=JSON.parse(require("fs").readFileSync(0));for(const t in s)for(const k in s[t])console.log(t,k,s[t][k].readable+"%",s[t][k].minified)'
+  step leftover;        $N tools/verify/leftover.mjs analysis/readability
+  step name-shape;      $N tools/verify/name-shape.mjs naming/final analysis/name-shape | head -6
+  step doc-refs;        echo "FAIL: $(node --max-old-space-size=8000 tools/verify/doc-refs.mjs . docs/ARCHITECTURE.md docs/CHANGES-SINCE-2.1.88.md docs/INDEX.md docs/handbook/*.md | grep -c ' FAIL ')"
+  step no-scratch-dirs; echo "_new/ _unattributed/ _misplaced/ dirs: $(find reconstructed -type d \( -name _new -o -name _unattributed -o -name _misplaced \) | wc -l)"
+fi

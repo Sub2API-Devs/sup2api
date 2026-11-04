@@ -276,3 +276,4 @@
 {"file":"chunk-kejz1rpb.js","stmt":5071,"verdict":"误报","why":"同上","by":"lead"}
 {"file":"chunk-vp5gef34.js","stmt":15549,"verdict":"改名","why":"isRegularFileWithinCap 实为“缺失/非普通文件/超 cap”判定，改名 isMissingNonFileOrOversized；existsAsRegularFile 依赖它的反义，名字存疑但无法从局部确认语义，保留；NOT_A_REGULAR_FILE 等为 Symbol，误报","by":"lead"}
 {"file":"chunk-y805ph4h.js","stmt":8011,"verdict":"误报","why":"INVALID_SKILL_NAME_CHARS 是字符集正则，_CHARS 规则针对计数","by":"lead"}
+{"file":"chunk-z0q4jgnc.js","stmt":977,"verdict":"改名","why":"getTagMapTag 等以 get 开头却是字符串常量（lodash _getTag.js 的 mapTag/promiseTag/setTag/dataViewTag），改为 mapTagOfGetTag 等；getTagImpl = baseGetTag 是函数，名字相符","by":"lead"}

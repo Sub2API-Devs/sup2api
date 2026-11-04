@@ -17,7 +17,9 @@ import _traverse from '@babel/traverse';
 const traverse = _traverse.default ?? _traverse;
 const argv = process.argv.slice(2);
 const ROOT = argv.find((a) => !a.startsWith('--')) ?? 'reconstructed';
-const REPORT = argv.includes('--report') ? argv[argv.indexOf('--report') + 1] : 'analysis/verify/readable-check.json';
+// the original tree's own run goes to a separate file: it is the baseline the reading tree's free identifiers are compared with
+const ORIGINAL_REPORT = 'analysis/verify/readable-check-original.json';
+const REPORT = argv.includes('--report') ? argv[argv.indexOf('--report') + 1] : ROOT === 'original' ? ORIGINAL_REPORT : 'analysis/verify/readable-check.json';
 const GLOBALS = new Set(Object.getOwnPropertyNames(globalThis).concat(['require', 'module', 'exports', '__dirname', '__filename', 'Bun', 'process', 'Buffer', 'global', 'window', 'document', 'navigator', 'self', 'arguments', 'undefined', 'globalThis', 'HTMLElement', 'Element', 'Node', 'location', 'Deno', 'XMLHttpRequest', 'ActiveXObject', 'importScripts', 'WorkerGlobalScope', 'define', 'chrome', 'localStorage', 'sessionStorage', 'MutationObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'getComputedStyle', 'Image', 'CSS', 'NodeFilter', 'DOMParser', 'XMLSerializer', 'Bun', '__webpack_require__', 'Intl']));
 
 const files = [];
@@ -119,8 +121,10 @@ const out = {
   missingImportNames: res.missingNames.length,
   freeIdentifiers: res.free.size,
   freeNames: [...res.free.keys()].sort(),
+  // same set as original/ (run `readable-check.mjs original` once to write the baseline)
+  freeSameAsOriginal: ROOT !== 'original' && fs.existsSync(ORIGINAL_REPORT) ? JSON.stringify(JSON.parse(fs.readFileSync(ORIGINAL_REPORT, 'utf8')).freeNames) === JSON.stringify([...res.free.keys()].sort()) : null,
   samples: { parseErrors: res.parseErrors.slice(0, 20), dupes: res.dupes.slice(0, 20), missingFiles: res.missingFiles.slice(0, 20), missingNames: res.missingNames.slice(0, 20), free: [...res.free].slice(0, 40) },
 };
 fs.mkdirSync(path.dirname(REPORT), { recursive: true });
 fs.writeFileSync(REPORT, JSON.stringify(out, null, 1));
-console.log(JSON.stringify({ files: out.files, declarations: { expected: coverage.expected, found: coverage.found, duplicated: coverage.duplicated }, parseErrors: out.parseErrors, duplicateDeclarations: out.duplicateDeclarations, missingImportFiles: out.missingImportFiles, missingImportNames: out.missingImportNames, freeIdentifiers: out.freeIdentifiers }));
+console.log(JSON.stringify({ files: out.files, declarations: { expected: coverage.expected, found: coverage.found, duplicated: coverage.duplicated }, parseErrors: out.parseErrors, duplicateDeclarations: out.duplicateDeclarations, missingImportFiles: out.missingImportFiles, missingImportNames: out.missingImportNames, freeIdentifiers: out.freeIdentifiers, freeSameAsOriginal: out.freeSameAsOriginal }));

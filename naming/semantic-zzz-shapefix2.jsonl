@@ -1,1 +1,7 @@
 {"file":"chunk-vp5gef34.js","key":"@16695","name":"isMissingNonFileOrOversized","source":"semantic","confidence":0.97,"note":"原名 isRegularFileWithinCap 与逻辑相反：stat 出结构性错误、不是普通文件或超过 cap 时返回 true"}
+{"file":"chunk-z0q4jgnc.js","key":"@981","name":"mapTagOfGetTag","source":"semantic","confidence":0.97,"note":"lodash _getTag.js 的 mapTag 常量（\"[object Map]\"）；同 chunk 已有同名常量，加 OfGetTag 区分，去掉误导的 get 前缀"}
+{"file":"chunk-z0q4jgnc.js","key":"@1019","name":"promiseTagOfGetTag","source":"semantic","confidence":0.97,"note":"lodash _getTag.js 的 promiseTag 常量（\"[object Promise]\"）；同 chunk 已有同名常量，加 OfGetTag 区分，去掉误导的 get 前缀"}
+{"file":"chunk-z0q4jgnc.js","key":"@1040","name":"setTagOfGetTag","source":"semantic","confidence":0.97,"note":"lodash _getTag.js 的 setTag 常量（\"[object Set]\"）；同 chunk 已有同名常量，加 OfGetTag 区分，去掉误导的 get 前缀"}
+{"file":"chunk-z0q4jgnc.js","key":"@1078","name":"dataViewTagOfGetTag","source":"semantic","confidence":0.97,"note":"lodash _getTag.js 的 dataviewTag 常量（\"[object DataView]\"）；同 chunk 已有同名常量，加 OfGetTag 区分，去掉误导的 get 前缀"}
+{"file":"chunk-bzr73sfg.js","key":"@269901","name":"fileParams","source":"semantic","confidence":0.95,"note":"iTerm2 File= 与第一个冒号之间的参数段"}
+{"file":"chunk-bzr73sfg.js","key":"@269924","name":"fileData","source":"semantic","confidence":0.95,"note":"冒号之后、BEL 之前的 base64 文件数据"}

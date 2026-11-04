@@ -65,3 +65,4 @@ node --max-old-space-size=3000 tools/naming/annotate.mjs check naming/semantic-l
 - 命名表写 `naming/semantic-v<N>.jsonl`（只追加）。
 - 第三方代码按包的习惯命名：CommonJS 包裹变量用 `require_<文件或模块名>`，`x(...)` 懒初始化用 `init_<名>`，导出对象的属性名（`exports.foo = a` 里的 foo）就是 `a` 的名字的首选；私有包（private-unresolved，无 npm 源码）按代码行为和字符串命名。
 - 不要用 `_K<偏移>` 作为名字的一部分（合并时会被丢弃）。
+- 共享的名字表目录（`artifacts/tmp/lead/final*`）只读：预览目录用 `cp` 复制，绝不用 `ln`（Git Bash 上 `ln` 会建硬链接，写预览就写坏了共享表；left-s1 踩过）。

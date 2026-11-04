@@ -28,7 +28,8 @@ const CONVENTIONAL = new Set(('i j k n m x y z e t v ' +
   ' add all any ask bad big cmp cpu cut due fix get has hit job kv lo hi mb kb gb').split(/\s+/).filter(Boolean));
 const looksMinified = (final, min, minifiedModule) => {
   if (final === '$' || final === '_') return false;
-  const base = final.replace(/_[a-z0-9]{4}\d*$/, '');
+  // strip a module-clash chunk tag (`K1e_ab12`); a name that is only `_meta`, `_host` … keeps itself
+  const base = final.replace(/(?<=[\w$])_[a-z0-9]{4}\d*$/, '');
   if (minifiedModule && base === min && min.length <= 3) return true;
   return base.length <= 3 && !CONVENTIONAL.has(base) && !CONVENTIONAL.has(base.toLowerCase());
 };
@@ -78,7 +79,7 @@ for (const file of files) {
     // A short name a naming member chose on purpose (different from the minified
     // one, two or more letters: ids, pin, ttl, jwt, mcp …, or a/b/c/d for
     // comparator-style pairs) is a reading decision, not leftover minification.
-    const chosen = !authentic && src0 && src0 !== "minified" && final !== b.name && !/_d+$/.test(final) && (/^[A-Za-z][A-Za-z0-9]+$/.test(final) || /^[abcd]$/.test(final));
+    const chosen = !authentic && src0 && src0 !== "minified" && final !== b.name && !/_\d+$/.test(final) && (/^[A-Za-z][A-Za-z0-9]+$/.test(final) || /^[abcd]$/.test(final));
     if (chosen && looksMinified(final, b.name, minifiedModule)) bump(`${tree}.${scope}.chosenShort`, 1);
     const bad = !authentic && !chosen && looksMinified(final, b.name, minifiedModule);
     let f = perFile.get(out);

@@ -457,7 +457,10 @@ function dynamicTarget(chunk) {
       dynStats.lazyModules++;
     }
   } else {
-    const fp = facadeInfo[chunk]?.path;
+    // a facade path is used only when it is a real place; new-in-316 facades carry a
+    // `_new/<name>.ts` placeholder, so their lazy module goes next to the code it re-exports
+    const fp0 = facadeInfo[chunk]?.path;
+    const fp = fp0 && !/(^|\/)_(new|unattributed|misplaced)\//.test(fp0) ? fp0 : null;
     const own = pairs.find((p) => !p[3]);
     const base = fp ? outPath(fp, 'first-party').replace(/\.js$/, '') : path.posix.join(own ? path.posix.dirname(own[0]) : 'src', (own ?? pairs[0])[2]);
     let lf = base + '.lazy.js', n = 2;
